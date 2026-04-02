@@ -222,7 +222,6 @@
     <nav>
       <button class="nav-btn active" onclick="showView('leaderboard')">Rankings</button>
       <button class="nav-btn" onclick="showView('add-shop')">+ Add Shop</button>
-      <button class="nav-btn" onclick="showView('settings')">⚙ GitHub</button>
     </nav>
   </div>
 </header>
@@ -268,47 +267,6 @@
     </div>
   </div>
 
-  <!-- SETTINGS -->
-  <div class="view" id="view-settings">
-    <h1 class="section-title">GitHub Sync</h1>
-    <p class="section-sub">Connect to a shared repository</p>
-    <div class="form-card">
-      <div class="setup-instructions">
-        <strong>One-time setup (≈5 minutes)</strong><br>
-        1. Create a new <strong>public</strong> GitHub repo — e.g. <code>sandwich-data</code>.<br>
-        2. Commit this <code>sandwich-reviews.html</code> file to the root of the repo.<br>
-        3. Go to <a href="https://github.com/settings/tokens/new" target="_blank">GitHub → Settings → Developer settings → Tokens (classic)</a><br>
-        4. Generate a token with the <strong>repo</strong> scope ticked. Copy it.<br>
-        5. Fill in the fields below and click <strong>Save &amp; Connect</strong>.<br><br>
-        <strong>How it works:</strong><br>
-        • Adding a shop patches the <code>shops</code> list directly into <code>sandwich-reviews.html</code> — anyone who opens the file sees the latest shops, even without a token.<br>
-        • Reviews are stored separately in <code>reviews.json</code> (auto-created on first review).<br>
-        • Share the same token + repo details with anyone who needs write access.
-      </div>
-
-      <div class="field">
-        <label>Personal Access Token</label>
-        <input type="text" id="cfg-token" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" autocomplete="off">
-      </div>
-      <div class="field">
-        <label>Repository Owner (username or org)</label>
-        <input type="text" id="cfg-owner" placeholder="e.g. acme-corp">
-      </div>
-      <div class="field">
-        <label>Repository Name</label>
-        <input type="text" id="cfg-repo" placeholder="e.g. sandwich-data">
-      </div>
-      <div class="field">
-        <label>Branch <span style="opacity:0.5;font-size:0.6rem;">(leave blank for main)</span></label>
-        <input type="text" id="cfg-branch" placeholder="main">
-      </div>
-      <div class="btn-row">
-        <button class="btn-large" onclick="saveConfig()">Save &amp; Connect</button>
-        <button class="btn-large" style="background:var(--tan);" onclick="clearConfig()">Disconnect</button>
-      </div>
-      <p style="font-size:0.62rem;color:var(--tan);margin-top:16px;line-height:1.6;">⚠ The token is stored in your browser's localStorage. Avoid using this on shared or public computers.</p>
-    </div>
-  </div>
 
   <!-- DETAIL -->
   <div class="view" id="view-detail">
@@ -347,7 +305,8 @@
 // ─────────────────────────────────────────────
 //  CONSTANTS
 // ─────────────────────────────────────────────
-const FILE_PATH = 'reviews.json';
+const REVIEWS_FILE = 'reviews.json';
+const HTML_FILE    = 'sandwich-reviews.html';
 
 const CRITERIA = [
   { key:'bread',   label:'Bread Quality',          emoji:'🍞' },
@@ -366,70 +325,50 @@ let shops = [];
 // @@SHOPS_END@@
 
 // ─────────────────────────────────────────────
-//  STATE
+//  STATE  — no localStorage anywhere
 // ─────────────────────────────────────────────
-let reviews = [];
+let reviews         = [];
 let currentSort     = 'overall';
 let reviewingShopId = null;
 let pendingRatings  = {};
-let fileSha = null; // blob SHA required by GitHub API to update an existing file
+let reviewsSha      = null; // GitHub blob SHA for reviews.json
 
 // ─────────────────────────────────────────────
-//  CONFIG
+//  CONFIG  — hard-coded, no settings screen needed
 // ─────────────────────────────────────────────
+const GH_TOKEN  = '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';
+const GH_OWNER  = 'jennidiot';
+const GH_REPO   = 'sandwich-reviews';
+const GH_BRANCH = 'main';
+
 function getConfig() {
-  return {
-    token:  localStorage.getItem('sw_gh_token')  || '',
-    owner:  localStorage.getItem('sw_gh_owner')  || '',
-    repo:   localStorage.getItem('sw_gh_repo')   || '',
-    branch: localStorage.getItem('sw_gh_branch') || 'main',
-  };
+  return { token: GH_TOKEN, owner: GH_OWNER, repo: GH_REPO, branch: GH_BRANCH };
 }
-function isConfigured() {
-  const c = getConfig();
-  return !!(c.token && c.owner && c.repo);
-}
-function populateSettingsForm() {
-  const c = getConfig();
-  document.getElementById('cfg-token').value  = c.token;
-  document.getElementById('cfg-owner').value  = c.owner;
-  document.getElementById('cfg-repo').value   = c.repo;
-  document.getElementById('cfg-branch').value = c.branch;
-}
-function saveConfig() {
-  const token  = document.getElementById('cfg-token').value.trim();
-  const owner  = document.getElementById('cfg-owner').value.trim();
-  const repo   = document.getElementById('cfg-repo').value.trim();
-  const branch = document.getElementById('cfg-branch').value.trim() || 'main';
-  if (!token || !owner || !repo) { showToast('Please fill in token, owner and repo.', true); return; }
-  localStorage.setItem('sw_gh_token',  token);
-  localStorage.setItem('sw_gh_owner',  owner);
-  localStorage.setItem('sw_gh_repo',   repo);
-  localStorage.setItem('sw_gh_branch', branch);
-  showToast('Saved — connecting to GitHub…');
-  showView('leaderboard');
-  syncFromGitHub(true);
-}
-function clearConfig() {
-  ['sw_gh_token','sw_gh_owner','sw_gh_repo','sw_gh_branch'].forEach(k => localStorage.removeItem(k));
-  fileSha = null;
-  setSyncStatus('disconnected', 'Not connected');
-  showToast('Disconnected from GitHub.');
-  showView('leaderboard');
-}
+function isConfigured() { return true; }
 
 // ─────────────────────────────────────────────
 //  GITHUB API
 // ─────────────────────────────────────────────
+
+// Safe UTF-8 base64 decode (handles emoji and accented chars in review notes)
+function b64decode(str) {
+  return decodeURIComponent(
+    atob(str.replace(/\n/g, ''))
+      .split('')
+      .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+      .join('')
+  );
+}
+
 async function ghRequest(path, method = 'GET', body = null) {
   const { token, owner, repo } = getConfig();
-  const url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
+  const url  = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
   const opts = {
     method,
     headers: {
       'Authorization': `token ${token}`,
-      'Accept': 'application/vnd.github.v3+json',
-      'Content-Type': 'application/json',
+      'Accept':        'application/vnd.github.v3+json',
+      'Content-Type':  'application/json',
     },
   };
   if (body) opts.body = JSON.stringify(body);
@@ -441,79 +380,85 @@ async function ghRequest(path, method = 'GET', body = null) {
   return res.status === 204 ? null : res.json();
 }
 
+// ─────────────────────────────────────────────
+//  SYNC — read reviews.json from GitHub
+// ─────────────────────────────────────────────
 async function syncFromGitHub(showLoader = false) {
-  if (!isConfigured()) { loadLocalFallback(); return; }
   if (showLoader) showLoading('Fetching latest data…');
   setSyncStatus('syncing', 'Syncing…');
   try {
-    const data    = await ghRequest(FILE_PATH);
-    const content = JSON.parse(atob(data.content.replace(/\n/g, '')));
-    reviews = content.reviews || [];
-    fileSha = data.sha;
+    const data = await ghRequest(REVIEWS_FILE);
+    const raw  = (data.content || '').replace(/\n/g, '');
+    let content = { reviews: [] };
+    if (raw) {
+      try { content = JSON.parse(b64decode(raw)); }
+      catch (e) { console.warn('reviews.json parse failed, treating as empty:', e); }
+    }
+    reviews    = content.reviews || [];
+    reviewsSha = data.sha;
     setSyncStatus('connected', 'Synced ✓');
-    saveLocal();
     renderLeaderboard();
   } catch (e) {
-    if (e.message && e.message.toLowerCase().includes('not found')) {
-      // reviews.json doesn't exist yet — create it
-      reviews = []; fileSha = null;
+    const msg = (e.message || '').toLowerCase();
+    if (msg.includes('not found') || msg.includes('404')) {
+      // reviews.json doesn't exist yet — create it now
+      reviews = []; reviewsSha = null;
       try {
         await pushReviews('Initialise reviews.json');
         setSyncStatus('connected', 'Synced ✓');
       } catch (e2) {
         setSyncStatus('disconnected', 'Auth error');
-        showToast('Could not create reviews.json — check your token has repo scope.', true);
+        showToast('Could not write to repo — check your token has repo scope.', true);
       }
       renderLeaderboard();
     } else {
       setSyncStatus('disconnected', 'Sync failed');
       showToast('GitHub sync failed: ' + e.message, true);
-      loadLocalFallback();
+      renderLeaderboard();
     }
   } finally {
     hideLoading();
   }
 }
 
-// Push reviews.json only
+// ─────────────────────────────────────────────
+//  PUSH reviews.json
+// ─────────────────────────────────────────────
 async function pushReviews(commitMessage) {
   const payload = { reviews, lastUpdated: new Date().toISOString() };
   const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2))));
   const body    = { message: commitMessage, content: encoded, branch: getConfig().branch };
-  if (fileSha) body.sha = fileSha;
-  const res = await ghRequest(FILE_PATH, 'PUT', body);
-  fileSha = res.content.sha;
+  if (reviewsSha) body.sha = reviewsSha;
+  const res  = await ghRequest(REVIEWS_FILE, 'PUT', body);
+  reviewsSha = res.content.sha;
 }
 
-// Patch the shops array back into sandwich-reviews.html in the repo
+// ─────────────────────────────────────────────
+//  PUSH shops back into sandwich-reviews.html
+// ─────────────────────────────────────────────
 async function pushShopsToHtml(commitMessage) {
   const { owner, repo, branch, token } = getConfig();
-  const htmlPath = 'sandwich-reviews.html';
 
-  // Fetch the current HTML file from the repo
-  const fileData = await ghRequest(htmlPath);
-  const currentHtml = atob(fileData.content.replace(/\n/g, ''));
+  // Always fetch fresh to get the current SHA (avoids conflicts)
+  const fileData    = await ghRequest(HTML_FILE);
+  const currentHtml = b64decode(fileData.content);
   const htmlSha     = fileData.sha;
 
-  // Replace the shops block between the sentinel comments
-  const shopJson   = JSON.stringify(shops, null, 2)
-                       .split('\n').map((l,i) => i===0 ? l : '  ' + l).join('\n'); // indent nicely
-  const newBlock   = `// @@SHOPS_START@@\nlet shops = ${shopJson};\n// @@SHOPS_END@@`;
-  const sentinel   = /\/\/ @@SHOPS_START@@[\s\S]*?\/\/ @@SHOPS_END@@/;
-
+  const sentinel = /\/\/ @@SHOPS_START@@[\s\S]*?\/\/ @@SHOPS_END@@/;
   if (!sentinel.test(currentHtml)) {
-    throw new Error('Sentinel markers not found in HTML file — cannot patch shops.');
+    throw new Error('Sentinel markers not found in HTML — cannot patch shops.');
   }
 
+  const shopJson    = JSON.stringify(shops, null, 2)
+                        .split('\n').map((l, i) => i === 0 ? l : '  ' + l).join('\n');
+  const newBlock    = `// @@SHOPS_START@@\nlet shops = ${shopJson};\n// @@SHOPS_END@@`;
   const updatedHtml = currentHtml.replace(sentinel, newBlock);
   const encoded     = btoa(unescape(encodeURIComponent(updatedHtml)));
 
-  const body = { message: commitMessage, content: encoded, branch, sha: htmlSha };
-  const url  = `https://api.github.com/repos/${owner}/${repo}/contents/${htmlPath}`;
-  const res  = await fetch(url, {
-    method: 'PUT',
+  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${HTML_FILE}`, {
+    method:  'PUT',
     headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    body:    JSON.stringify({ message: commitMessage, content: encoded, branch, sha: htmlSha }),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -522,43 +467,13 @@ async function pushShopsToHtml(commitMessage) {
 }
 
 // ─────────────────────────────────────────────
-//  LOCAL STORAGE (cache / offline fallback)
-// ─────────────────────────────────────────────
-function saveLocal() {
-  localStorage.setItem('sw_reviews', JSON.stringify(reviews));
-}
-function loadLocalFallback() {
-  reviews = JSON.parse(localStorage.getItem('sw_reviews') || '[]');
-  // shops come from the embedded @@SHOPS_START@@ block — only seed if truly empty
-  if (shops.length === 0) seedDemo();
-  renderLeaderboard();
-}
-function seedDemo() {
-  // Only used when running the file locally without GitHub configured and no shops embedded yet
-  shops = [
-    { id:'s1', name:'Bread & Butter Co.',  location:'42 Borough Market, London'  },
-    { id:'s2', name:'The Wedge',            location:'8 Carnaby Street, London'   },
-    { id:'s3', name:'Melt',                 location:'23 Exmouth Market, London'  },
-  ];
-  reviews = [
-    { id:'r1', shopId:'s1', date:'2026-01-15', notes:'Incredible sourdough, perfectly balanced.', bread:5,filling:4,ratio:5,value:4,allergy:5,overall:5 },
-    { id:'r2', shopId:'s1', date:'2026-02-03', notes:'A little pricey but worth it.',              bread:4,filling:5,ratio:4,value:3,allergy:4,overall:4 },
-    { id:'r3', shopId:'s2', date:'2026-01-20', notes:'Great fillings, slightly dry bread.',         bread:3,filling:5,ratio:3,value:4,allergy:3,overall:4 },
-    { id:'r4', shopId:'s3', date:'2026-02-11', notes:'The melt was divine.',                        bread:4,filling:4,ratio:4,value:4,allergy:4,overall:4 },
-  ];
-  saveLocal();
-}
-
-// ─────────────────────────────────────────────
-//  SAVE (GitHub + local)
+//  SAVE HELPERS
 // ─────────────────────────────────────────────
 async function saveReviews(commitMsg) {
-  saveLocal();
-  if (isConfigured()) await pushReviews(commitMsg);
+  await pushReviews(commitMsg);
 }
 async function saveShops(commitMsg) {
-  if (isConfigured()) await pushShopsToHtml(commitMsg);
-  else saveLocal(); // local-only fallback — shops live in memory from the embedded block
+  await pushShopsToHtml(commitMsg);
 }
 
 // ─────────────────────────────────────────────
@@ -629,7 +544,6 @@ function showView(name) {
   document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
   if (name === 'leaderboard') { document.querySelectorAll('.nav-btn')[0].classList.add('active'); renderLeaderboard(); }
   if (name === 'add-shop')    { document.querySelectorAll('.nav-btn')[1].classList.add('active'); }
-  if (name === 'settings')    { document.querySelectorAll('.nav-btn')[2].classList.add('active'); populateSettingsForm(); }
 }
 
 // ─────────────────────────────────────────────
@@ -740,8 +654,8 @@ async function addShop() {
     showToast('Shop registered — written to HTML file!');
     showView('leaderboard');
   } catch(e) {
-    showToast('Shop saved locally — GitHub sync failed: ' + e.message, true);
-    renderLeaderboard();
+    showToast('GitHub sync failed: ' + e.message, true);
+    shops.pop(); // roll back the optimistic add
   } finally {
     hideLoading();
     btn.disabled = false; btn.textContent = 'Register Shop';
@@ -800,9 +714,9 @@ async function submitReview() {
     if (document.getElementById('view-leaderboard').classList.contains('active')) renderLeaderboard();
     if (document.getElementById('view-detail').classList.contains('active')) showDetail(sid);
   } catch(e) {
-    showToast('Saved locally — GitHub sync failed: ' + e.message, true);
+    showToast('GitHub sync failed: ' + e.message, true);
+    reviews.pop(); // roll back
     closeModal();
-    renderLeaderboard();
   } finally {
     hideLoading();
     btn.disabled = false; btn.textContent = 'Submit Verdict';
@@ -812,14 +726,10 @@ async function submitReview() {
 // ─────────────────────────────────────────────
 //  INIT
 // ─────────────────────────────────────────────
-// shops[] is already populated from the embedded @@SHOPS_START@@ block above.
-// We just need to fetch reviews from GitHub (or fall back to localStorage).
+// shops[] is populated from the embedded @@SHOPS_START@@ block.
+// reviews come exclusively from GitHub.
 (async function init() {
-  if (isConfigured()) {
-    await syncFromGitHub(true);
-  } else {
-    loadLocalFallback();
-  }
+  await syncFromGitHub(true);
 })();
 </script>
 </body>
