@@ -1,4 +1,17 @@
 {
-  "reviews": [],
-  "lastUpdated": ""
+  "reviews": [
+    {
+      "id": "xiulci7kz",
+      "shopId": "x9uqechmz",
+      "date": "2026-04-02",
+      "notes": "",
+      "bread": 5,
+      "filling": 4,
+      "ratio": 4,
+      "value": 4,
+      "allergy": 5,
+      "overall": 4
+    }
+  ],
+  "lastUpdated": "2026-04-02T10:28:22.394Z"
 }
