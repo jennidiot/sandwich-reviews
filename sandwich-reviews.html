@@ -334,23 +334,17 @@ let pendingRatings  = {};
 let reviewsSha      = null; // GitHub blob SHA for reviews.json
 
 // ─────────────────────────────────────────────
-//  CONFIG  — hard-coded, no settings screen needed
+//  CONFIG
 // ─────────────────────────────────────────────
-const GH_TOKEN  = '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';
 const GH_OWNER  = 'jennidiot';
 const GH_REPO   = 'sandwich-reviews';
 const GH_BRANCH = 'main';
 
-function getConfig() {
-  return { token: GH_TOKEN, owner: GH_OWNER, repo: GH_REPO, branch: GH_BRANCH };
-}
-function isConfigured() { return true; }
-
 // ─────────────────────────────────────────────
-//  GITHUB API
+//  PROXY API  — all GitHub calls go via /.netlify/functions/github
+//  Token lives in Netlify env vars, never in client code
 // ─────────────────────────────────────────────
 
-// Safe UTF-8 base64 decode (handles emoji and accented chars in review notes)
 function b64decode(str) {
   return decodeURIComponent(
     atob(str.replace(/\n/g, ''))
@@ -361,27 +355,20 @@ function b64decode(str) {
 }
 
 async function ghRequest(path, method = 'GET', body = null) {
-  const { token, owner, repo } = getConfig();
-  const url  = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
-  const opts = {
-    method,
-    headers: {
-      'Authorization': `token ${token}`,
-      'Accept':        'application/vnd.github.v3+json',
-      'Content-Type':  'application/json',
-    },
-  };
-  if (body) opts.body = JSON.stringify(body);
-  const res = await fetch(url, opts);
+  const res = await fetch('/.netlify/functions/github', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path, method, body }),
+  });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || `GitHub API ${res.status}`);
+    throw new Error(err.error || `Proxy error ${res.status}`);
   }
-  return res.status === 204 ? null : res.json();
+  return res.json();
 }
 
 // ─────────────────────────────────────────────
-//  SYNC — read reviews.json from GitHub
+//  SYNC — read reviews.json
 // ─────────────────────────────────────────────
 async function syncFromGitHub(showLoader = false) {
   if (showLoader) showLoading('Fetching latest data…');
@@ -401,19 +388,18 @@ async function syncFromGitHub(showLoader = false) {
   } catch (e) {
     const msg = (e.message || '').toLowerCase();
     if (msg.includes('not found') || msg.includes('404')) {
-      // reviews.json doesn't exist yet — create it now
       reviews = []; reviewsSha = null;
       try {
         await pushReviews('Initialise reviews.json');
         setSyncStatus('connected', 'Synced ✓');
       } catch (e2) {
-        setSyncStatus('disconnected', 'Auth error');
-        showToast('Could not write to repo — check your token has repo scope.', true);
+        setSyncStatus('disconnected', 'Error');
+        showToast('Could not initialise reviews.json: ' + e2.message, true);
       }
       renderLeaderboard();
     } else {
       setSyncStatus('disconnected', 'Sync failed');
-      showToast('GitHub sync failed: ' + e.message, true);
+      showToast('Sync failed: ' + e.message, true);
       renderLeaderboard();
     }
   } finally {
@@ -427,7 +413,7 @@ async function syncFromGitHub(showLoader = false) {
 async function pushReviews(commitMessage) {
   const payload = { reviews, lastUpdated: new Date().toISOString() };
   const encoded = btoa(unescape(encodeURIComponent(JSON.stringify(payload, null, 2))));
-  const body    = { message: commitMessage, content: encoded, branch: getConfig().branch };
+  const body    = { message: commitMessage, content: encoded, branch: GH_BRANCH };
   if (reviewsSha) body.sha = reviewsSha;
   const res  = await ghRequest(REVIEWS_FILE, 'PUT', body);
   reviewsSha = res.content.sha;
@@ -437,9 +423,6 @@ async function pushReviews(commitMessage) {
 //  PUSH shops back into sandwich-reviews.html
 // ─────────────────────────────────────────────
 async function pushShopsToHtml(commitMessage) {
-  const { owner, repo, branch, token } = getConfig();
-
-  // Always fetch fresh to get the current SHA (avoids conflicts)
   const fileData    = await ghRequest(HTML_FILE);
   const currentHtml = b64decode(fileData.content);
   const htmlSha     = fileData.sha;
@@ -455,26 +438,19 @@ async function pushShopsToHtml(commitMessage) {
   const updatedHtml = currentHtml.replace(sentinel, newBlock);
   const encoded     = btoa(unescape(encodeURIComponent(updatedHtml)));
 
-  const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${HTML_FILE}`, {
-    method:  'PUT',
-    headers: { 'Authorization': `token ${token}`, 'Accept': 'application/vnd.github.v3+json', 'Content-Type': 'application/json' },
-    body:    JSON.stringify({ message: commitMessage, content: encoded, branch, sha: htmlSha }),
+  await ghRequest(HTML_FILE, 'PUT', {
+    message: commitMessage,
+    content: encoded,
+    branch:  GH_BRANCH,
+    sha:     htmlSha,
   });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || `GitHub API ${res.status}`);
-  }
 }
 
 // ─────────────────────────────────────────────
 //  SAVE HELPERS
 // ─────────────────────────────────────────────
-async function saveReviews(commitMsg) {
-  await pushReviews(commitMsg);
-}
-async function saveShops(commitMsg) {
-  await pushShopsToHtml(commitMsg);
-}
+async function saveReviews(commitMsg) { await pushReviews(commitMsg); }
+async function saveShops(commitMsg)   { await pushShopsToHtml(commitMsg); }
 
 // ─────────────────────────────────────────────
 //  HELPERS
