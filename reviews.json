@@ -23,7 +23,19 @@
       "ratio": 4,
       "value": 4,
       "allergy": 5
+    },
+    {
+      "id": "xnbr2kszo",
+      "shopId": "xwzx51o5i",
+      "date": "2026-04-07",
+      "notes": "",
+      "overall": 4,
+      "ratio": 4,
+      "value": 4,
+      "filling": 3,
+      "bread": 4,
+      "allergy": 5
     }
   ],
-  "lastUpdated": "2026-04-07T10:22:00.143Z"
+  "lastUpdated": "2026-04-07T12:58:06.396Z"
 }
