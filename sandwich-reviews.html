@@ -283,9 +283,18 @@
     <div class="modal-title" id="modal-shop-name"></div>
     <div class="modal-sub">Submit your verdict</div>
     <div class="criteria-list" id="criteria-list"></div>
+    <div style="background:var(--cream);border:1.5px solid var(--light-tan);border-radius:4px;padding:14px 18px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-size:0.7rem;letter-spacing:1px;text-transform:uppercase;color:var(--tan);">⭐ Overall Score <span style="font-size:0.6rem;opacity:0.7;">(calculated)</span></div>
+      <div id="calculated-overall" style="font-family:'Playfair Display',serif;font-size:1.6rem;font-weight:700;color:var(--rust);">—</div>
+    </div>
     <div class="notes-field">
       <label>Tasting Notes <span style="opacity:0.5;font-size:0.6rem;">(optional)</span></label>
       <textarea id="review-notes" placeholder="Describe your experience…"></textarea>
+    </div>
+    <div style="background:rgba(61,28,2,0.04);border:1.5px solid var(--light-tan);border-radius:4px;padding:14px 16px;margin-bottom:20px;font-size:0.62rem;color:var(--tan);line-height:1.7;">
+      <strong style="color:var(--brown);display:block;margin-bottom:4px;">Please note</strong>
+      This tool is not affiliated with or endorsed by our employer in any way. It is an independent personal project.
+      No personal data is collected by this app. Please do not include any personal, sensitive, or confidential information in your tasting notes.
     </div>
     <button class="btn-large" id="submit-review-btn" onclick="submitReview()">Submit Verdict</button>
   </div>
@@ -314,20 +323,15 @@ const CRITERIA = [
   { key:'ratio',   label:'Filling to Bread Ratio',  emoji:'⚖️' },
   { key:'value',   label:'Value for Money',          emoji:'💰' },
   { key:'allergy', label:'Allergy Control',          emoji:'🛡️' },
-  { key:'overall', label:'Overall Score',            emoji:'⭐' },
 ];
+
+// Overall is calculated as the mean of all CRITERIA — never entered manually
 
 // ─────────────────────────────────────────────
 //  SHOPS DATA  (written back to this file by addShop)
 // ─────────────────────────────────────────────
 // @@SHOPS_START@@
-let shops = [
-    {
-      "id": "x9uqechmz",
-      "name": "Salt Pig",
-      "location": "Fossgate, York"
-    }
-  ];
+let shops = [];
 // @@SHOPS_END@@
 
 // ─────────────────────────────────────────────
@@ -469,6 +473,9 @@ function avg(shopId, key) {
 function shopAvgs(shopId) {
   const out = {};
   CRITERIA.forEach(c => { out[c.key] = avg(shopId, c.key); });
+  // overall = mean of the individual criteria averages
+  const vals = CRITERIA.map(c => out[c.key]).filter(v => v != null);
+  out.overall = vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
   return out;
 }
 function reviewCount(shopId) { return reviews.filter(r => r.shopId === shopId).length; }
@@ -541,7 +548,7 @@ function renderLeaderboard() {
   grid.innerHTML = sorted.map((shop, i) => {
     const avgs  = shopAvgs(shop.id);
     const count = reviewCount(shop.id);
-    const bars  = CRITERIA.filter(c => c.key !== 'overall').map(c => {
+    const bars  = CRITERIA.map(c => {
       const v = avgs[c.key];
       return `<div class="mini-bar-row">
         <div class="mini-bar-label">${c.label}</div>
@@ -575,22 +582,32 @@ function showDetail(shopId) {
   if (!shop) return;
   const avgs = shopAvgs(shopId);
   const rs   = reviews.filter(r => r.shopId === shopId).sort((a,b) => b.date.localeCompare(a.date));
-  const critTiles = CRITERIA.map(c => {
-    const v = avgs[c.key];
-    return `<div class="crit-tile">
-      <div class="crit-tile-name">${c.emoji} ${c.label}</div>
-      <div class="crit-tile-score">${fmt(v)}<span style="font-size:1rem;color:var(--tan)">/5</span></div>
-      <div class="bar-track"><div class="bar-fill" style="width:${v?(v/5*100):0}%"></div></div>
-    </div>`;
-  }).join('');
+  const critTiles = [
+    ...CRITERIA.map(c => {
+      const v = avgs[c.key];
+      return `<div class="crit-tile">
+        <div class="crit-tile-name">${c.emoji} ${c.label}</div>
+        <div class="crit-tile-score">${fmt(v)}<span style="font-size:1rem;color:var(--tan)">/5</span></div>
+        <div class="bar-track"><div class="bar-fill" style="width:${v?(v/5*100):0}%"></div></div>
+      </div>`;
+    }),
+    // Overall tile — calculated, shown last
+    `<div class="crit-tile" style="border-color:var(--mustard);">
+      <div class="crit-tile-name">⭐ Overall Score <span style="font-size:0.55rem;opacity:0.7;">(calculated)</span></div>
+      <div class="crit-tile-score">${fmt(avgs.overall)}<span style="font-size:1rem;color:var(--tan)">/5</span></div>
+      <div class="bar-track"><div class="bar-fill" style="width:${avgs.overall?(avgs.overall/5*100):0}%;background:var(--mustard);"></div></div>
+    </div>`,
+  ].join('');
   const reviewItems = rs.length ? rs.map(r => {
-    const scoreGrid = CRITERIA.filter(c => c.key!=='overall').map(c =>
+    // Calculate this individual review's overall from its criteria scores
+    const rOverall = CRITERIA.reduce((sum, c) => sum + (r[c.key] || 0), 0) / CRITERIA.length;
+    const scoreGrid = CRITERIA.map(c =>
       `<div class="rs-item"><strong>${r[c.key]??'—'}/5</strong>${c.label}</div>`
     ).join('');
     return `<div class="review-item">
       <div class="review-item-header">
         <div class="review-date">${new Date(r.date).toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'})}</div>
-        <div class="review-overall-badge">Overall: ${r.overall}/5</div>
+        <div class="review-overall-badge">Overall: ${rOverall.toFixed(1)}/5</div>
       </div>
       <div class="review-scores-grid">${scoreGrid}</div>
       ${r.notes?`<div class="review-notes">"${r.notes}"</div>`:''}
@@ -653,6 +670,7 @@ function openReviewModal(shopId) {
   pendingRatings  = {};
   document.getElementById('modal-shop-name').textContent    = shop.name;
   document.getElementById('review-notes').value             = '';
+  document.getElementById('calculated-overall').textContent = '—';
   document.getElementById('submit-review-btn').disabled     = false;
   document.getElementById('submit-review-btn').textContent  = 'Submit Verdict';
   document.getElementById('criteria-list').innerHTML = CRITERIA.map(c => `
@@ -673,6 +691,15 @@ function setRating(key, val) {
   document.querySelectorAll(`#stars-${key} .star-btn`).forEach(b => {
     b.classList.toggle('lit', parseInt(b.dataset.val) <= val);
   });
+  // Recalculate live overall
+  const rated = CRITERIA.map(c => pendingRatings[c.key]).filter(v => v != null);
+  const el = document.getElementById('calculated-overall');
+  if (rated.length === 0) {
+    el.textContent = '—';
+  } else {
+    const mean = rated.reduce((a, b) => a + b, 0) / rated.length;
+    el.textContent = mean.toFixed(1) + '/5';
+  }
 }
 function closeModal() {
   document.getElementById('review-modal').classList.remove('open');
@@ -683,8 +710,15 @@ async function submitReview() {
   if (missing.length) { showToast('Please rate: ' + missing.map(c=>c.label).join(', '), true); return; }
   const btn = document.getElementById('submit-review-btn');
   btn.disabled = true; btn.textContent = 'Submitting…';
-  const notes    = document.getElementById('review-notes').value.trim();
-  const review   = { id:uid(), shopId:reviewingShopId, date:new Date().toISOString().slice(0,10), notes, ...pendingRatings };
+  const notes  = document.getElementById('review-notes').value.trim();
+  // Calculate overall as mean of all criteria scores
+  const overall = CRITERIA.reduce((sum, c) => sum + pendingRatings[c.key], 0) / CRITERIA.length;
+  const review  = {
+    id: uid(), shopId: reviewingShopId,
+    date: new Date().toISOString().slice(0,10),
+    notes, overall: Math.round(overall * 10) / 10,
+    ...pendingRatings,
+  };
   const shopName = shops.find(s => s.id === reviewingShopId)?.name || 'shop';
   const sid      = reviewingShopId;
   reviews.push(review);
