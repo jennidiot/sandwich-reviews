@@ -95,7 +95,19 @@
       "bread": 3,
       "value": 3,
       "allergy": 5
+    },
+    {
+      "id": "xve7za8r9",
+      "shopId": "xghm3t3yl",
+      "date": "2026-05-05",
+      "notes": "An average Panni at best. Cheese to Ham ratio ok, but not the best quality.",
+      "overall": 1.2,
+      "bread": 1,
+      "filling": 1,
+      "ratio": 2,
+      "value": 1,
+      "allergy": 1
     }
   ],
-  "lastUpdated": "2026-05-05T12:40:44.769Z"
+  "lastUpdated": "2026-05-05T14:50:37.636Z"
 }
