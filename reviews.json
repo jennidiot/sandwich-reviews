@@ -119,7 +119,19 @@
       "ratio": 3,
       "value": 2,
       "allergy": 3
+    },
+    {
+      "id": "xi4trdosg",
+      "shopId": "xghm3t3yl",
+      "date": "2026-05-06",
+      "notes": "",
+      "overall": 2.4,
+      "bread": 2,
+      "filling": 3,
+      "ratio": 3,
+      "value": 2,
+      "allergy": 2
     }
   ],
-  "lastUpdated": "2026-05-06T12:09:36.815Z"
+  "lastUpdated": "2026-05-06T12:35:23.195Z"
 }
