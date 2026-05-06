@@ -107,7 +107,19 @@
       "ratio": 2,
       "value": 1,
       "allergy": 1
+    },
+    {
+      "id": "xz3io7dek",
+      "shopId": "xghm3t3yl",
+      "date": "2026-05-06",
+      "notes": "Average all round for the Meatballs.",
+      "overall": 2.4,
+      "bread": 2,
+      "filling": 2,
+      "ratio": 3,
+      "value": 2,
+      "allergy": 3
     }
   ],
-  "lastUpdated": "2026-05-05T14:50:37.636Z"
+  "lastUpdated": "2026-05-06T12:09:36.815Z"
 }
