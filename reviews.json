@@ -179,7 +179,19 @@
       "ratio": 5,
       "value": 5,
       "allergy": 5
+    },
+    {
+      "id": "xtursc15i",
+      "shopId": "xkfp79m22",
+      "date": "2026-05-20",
+      "notes": "",
+      "overall": 5,
+      "bread": 5,
+      "filling": 5,
+      "ratio": 5,
+      "value": 5,
+      "allergy": 5
     }
   ],
-  "lastUpdated": "2026-05-20T12:36:58.514Z"
+  "lastUpdated": "2026-05-20T14:05:03.404Z"
 }
